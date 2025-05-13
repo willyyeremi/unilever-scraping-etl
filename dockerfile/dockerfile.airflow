@@ -1,0 +1,14 @@
+FROM apache/airflow:latest
+USER root
+RUN apt-get update && \
+    apt-get install -y wget unzip firefox-esr xvfb libpq-dev postgresql-client && \
+    rm -rf /var/lib/apt/lists/*
+RUN mkdir -p /var/log/xvfb
+RUN apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+USER airflow
+RUN pip install virtualenv cloudpickle redis
+RUN mkdir -p /home/airflow/browser_driver && \
+    wget -P /home/airflow https://github.com/mozilla/geckodriver/releases/download/v0.34.0/geckodriver-v0.34.0-linux64.tar.gz && \
+    tar -xzf /home/airflow/geckodriver-v0.34.0-linux64.tar.gz -C /home/airflow/browser_driver && \
+    rm /home/airflow/geckodriver-v0.34.0-linux64.tar.gz

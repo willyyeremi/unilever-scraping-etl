@@ -1,0 +1,7 @@
+random_user_agent
+selenium
+webdriver-manager
+beautifulsoup4
+requests
+sqlalchemy
+psycopg2-binary

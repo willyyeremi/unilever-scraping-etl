@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  airflow-scheduler:
+    build:
+      context: .
+      dockerfile: ./dockerfile/dockerfile.airflow
+    image: unilever-scrapper-airflow
+    container_name: unilever-scrapper-airflow-scheduler
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://admin:admin@postgresql:5432/airflow_database
+      AIRFLOW__CORE__FERNET_KEY: '4uBG5WCiywOYDzv_uesOLwXbL-CEx5PneA1FUZzTnFc='
+      AIRFLOW__WEBSERVER__SECRET_KEY: '7088a7040b2a62561888313540931945'
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
+    volumes:
+      - ./data/apache_airflow/logs:/opt/airflow/logs
+      - ./data/apache_airflow/plugins:/opt/airflow/plugins
+      - ./pipeline/apache_airflow:/opt/airflow/dags
+      - ./etc/apache_airflow:/home/airflow/initial_setup_tools
+    command: >
+      bash -c "
+      airflow db migrate && 
+      airflow users create --username admin --password admin --firstname admin --lastname admin --role Admin --email admin@example.com || echo 'User admin already exists' && 
+      python /home/airflow/initial_setup_tools/add_connection.py &&
+      exec airflow scheduler
+      "
+    networks:
+      - shared-network
+  airflow-webserver:
+    image: unilever-scrapper-airflow
+    container_name: unilever-scrapper-airflow-webserver
+    depends_on:
+      - airflow-scheduler
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://admin:admin@postgresql:5432/airflow_database
+      AIRFLOW__CORE__FERNET_KEY: '4uBG5WCiywOYDzv_uesOLwXbL-CEx5PneA1FUZzTnFc='
+      AIRFLOW__WEBSERVER__SECRET_KEY: '7088a7040b2a62561888313540931945'
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./etc/apache_airflow/webserver_config.py:/opt/airflow/webserver_config.py
+    command: >
+      bash -c "
+      airflow webserver
+      "
+    networks:
+      - shared-network
+
+networks:
+  shared-network:
+    name: unilever-network
+    external: true
