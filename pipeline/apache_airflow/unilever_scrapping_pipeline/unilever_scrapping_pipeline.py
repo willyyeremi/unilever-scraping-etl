@@ -1,4 +1,3 @@
-from subprocess import Popen
 from time import sleep
 import datetime
 import os
@@ -6,7 +5,7 @@ import os
 from airflow import DAG
 from airflow.operators.python import PythonOperator, PythonVirtualenvOperator
 from airflow.hooks.base import BaseHook
-from airflow.utils.task_group import TaskGroup
+from airflow.decorators import task_group, task
 from sqlalchemy.engine.url  import URL
 
 
@@ -51,16 +50,24 @@ conn_url_online_shop = str(create_url(config = conn_config_online_shop, database
 # callable for dag
 ##################################################
 
-def run_firefox_func():
-    xvfb_process = Popen(['Xvfb', ':99', '-screen', '0', '1920x1080x24'])
-    sleep(5)
-
-def raw_scrap_data_tokopedia_pipeline(connection_url):
+@task.virtualenv(
+    task_id = 'raw_scrap_data_tokopedia',
+    requirements = [r.strip() for r in open(os.path.join(base_path, "nodes", "level_1", "raw_scrap_data_tokopedia.txt")).readlines() if r.strip() and not r.strip().startswith("#")],
+    system_site_packages = False,
+)
+def raw_scrap_data_tokopedia(connection_url, real_base_path):
+    import sys
+    from time import sleep
+    from subprocess import Popen
     from sqlalchemy import create_engine
+    sys.path.append(real_base_path)
     from nodes.level_1 import raw_scrap_data_tokopedia
     
-    conn_engine_online_shop = create_engine(connection_url)
-    raw_scrap_data_tokopedia.run_pipeline(conn_engine_online_shop)
+    with Popen(['Xvfb', ':99', '-screen', '0', '1920x1080x24']) as xvfb_process:
+        os.environ["DISPLAY"] = ":99" 
+        sleep(5)
+        conn_engine_online_shop = create_engine(connection_url)
+        raw_scrap_data_tokopedia.run_pipeline(conn_engine_online_shop)
 
 
 ##################################################
@@ -84,17 +91,8 @@ dag = DAG(
 
 with dag:
     
-    run_firefox = PythonOperator(
-        task_id = 'run_firefox',
-        python_callable = run_firefox_func
-    )
+    @task_group()
+    def level_1():
+        raw_scrap_data_tokopedia_pipeline_task = raw_scrap_data_tokopedia(conn_url_online_shop, base_path)
     
-    raw_scrap_data_tokopedia = PythonVirtualenvOperator(
-        task_id = 'raw_scrap_data_tokopedia',
-        python_callable = raw_scrap_data_tokopedia_pipeline,
-        op_kwargs = {"connection_url": conn_url_online_shop},
-        requirements = [r.strip() for r in open(os.path.join(base_path, "nodes", "level_1", "raw_scrap_data_tokopedia.txt")).readlines() if r.strip() and not r.strip().startswith("#")],
-        system_site_packages = False,
-    )
-    
-    run_firefox >> raw_scrap_data_tokopedia
+    level_1()
