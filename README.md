@@ -1,4 +1,4 @@
-# Unilever Scrapper: ETL
+# Unilever Scraping: ETL
 This is the repository for the data pipeline.
 
 ## Precaution
