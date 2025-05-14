@@ -34,22 +34,12 @@ class raw_scrap_data(base):
 def driver_maker():
     from selenium.webdriver import Firefox, FirefoxOptions
     from selenium.webdriver.firefox.service import Service
-    # from random_user_agent.user_agent import UserAgent
-    # from random_user_agent.params import SoftwareName, OperatingSystem
-    # service = Service(executable_path = "/home/airflow/browser_driver/geckodriver")
-    service  = Service(executable_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "geckodriver.exe"))
-    # software_names = [SoftwareName.FIREFOX.value]
-    # operating_systems = [OperatingSystem.WINDOWS.value, OperatingSystem.LINUX.value]
-    # user_agent_rotator = UserAgent(software_names = software_names, operating_systems = operating_systems, limit = 100)
-    # user_agent = user_agent_rotator.get_random_user_agent()
+    service = Service(executable_path = "/home/airflow/browser_driver/geckodriver")
     options = FirefoxOptions()
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
     options.add_argument('--display=:99')
-    options.binary_location = "C:/Program Files/Mozilla Firefox/firefox.exe" 
-    # options.add_argument("--window-size=1920x1080")
-    # options.add_argument(f'user-agent={user_agent}')
     driver = Firefox(service = service, options = options)
     return driver
 
@@ -82,22 +72,21 @@ def product_validity_count(url, full_check = False):
 
 def find_last_valid_page(base_url,  step = 10):
     page = step
-    # Naik hingga ketemu halaman yang hanya berisi invalid
     while True:
         valid, invalid = product_validity_count(f"{base_url}/page/{page}")
         if invalid > 0:
             if valid > 0:
-                return page  # Halaman campuran valid+invalid => halaman terakhir ketemu
+                return page
             else:
                 page -= (step // 2)
-                break  # Hanya invalid, kita mundur nanti
+                break
         page += step
     status = 0
     while True:
         valid, invalid = product_validity_count(f"{base_url}/page/{page}")
         if valid > 0:
             if invalid > 0:
-                return page  # Halaman campuran => terakhir
+                return page
             elif invalid == 0:
                 valid, invalid = product_validity_count(f"{base_url}/page/{page}", full_check = True)
                 if invalid > 0:
@@ -140,11 +129,6 @@ def collect_product_links_from_catalog_page(url):
 
 def is_page_empty(soup) -> bool:
     try:
-        # # Cek apakah root elemen kosong
-        # zeus_root = soup.find('div', id='zeus-root')
-        # if zeus_root and not zeus_root.text.strip():
-        #     return True
-        # Cek apakah elemen-elemen penting tidak ditemukan
         name_element = soup.find('h1', class_='css-j63za0') if soup.find('h1', class_='css-j63za0') else None
         price_element = soup.find('div', class_='price') if soup.find('div', class_='price') else None
         if name_element is None or price_element is None:
@@ -228,37 +212,4 @@ def run_pipeline(connection_engine):
     engine = connection_engine
     last_valid_page = find_last_valid_page("https://www.tokopedia.com/unilever/product")
     print(f"Last valid page: {last_valid_page}")
-    collect_active_product_links_parallel_executor("https://www.tokopedia.com/unilever/product", last_valid_page, engine, num_processes = 5)
-
-
-##################################################
-# pipeline for local windows
-##################################################
-
-if __name__ == "__main__":
-    online_shop = {
-        "conn_type": "postgresql",
-        "login": "admin",
-        "password": "admin",
-        "host": "localhost",
-        "port": 5432,
-        "schema": "online_shop"
-    }
-    driver_dict = {
-        "postgresql": "psycopg2"
-    }
-    def create_url(config: dict[str:str], database_product: str):
-        driver = driver_dict[database_product]
-        url_object = URL.create(
-            f"{database_product}+{driver}"
-            ,username = config["login"]
-            ,password = config["password"]
-            ,host = config["host"]
-            ,port = config["port"]
-            ,database = config["schema"]
-        )
-        return url_object
-    url = create_url(online_shop, online_shop["conn_type"])
-    engine = create_engine(url)
-    last_valid_page = find_last_valid_page("https://www.tokopedia.com/unilever/product")
     collect_active_product_links_parallel_executor("https://www.tokopedia.com/unilever/product", last_valid_page, engine, num_processes = 5)
