@@ -2,7 +2,7 @@
 This is the repository for data pipeline.
 
 ## Precaution
-- set [[https://github.com/willyyeremi/unilever-scrapper-database|database first]], so the component can run.
+- set [database](https://github.com/willyyeremi/unilever-scrapper-database) first, so the component can run.
 - run start-container.bat first to set up needed component.
 
 ## Pipeline
