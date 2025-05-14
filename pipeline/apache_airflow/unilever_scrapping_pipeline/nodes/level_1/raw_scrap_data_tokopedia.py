@@ -140,11 +140,6 @@ def collect_product_links_from_catalog_page(url):
 
 def is_page_empty(soup) -> bool:
     try:
-        # # Cek apakah root elemen kosong
-        # zeus_root = soup.find('div', id='zeus-root')
-        # if zeus_root and not zeus_root.text.strip():
-        #     return True
-        # Cek apakah elemen-elemen penting tidak ditemukan
         name_element = soup.find('h1', class_='css-j63za0') if soup.find('h1', class_='css-j63za0') else None
         price_element = soup.find('div', class_='price') if soup.find('div', class_='price') else None
         if name_element is None or price_element is None:
@@ -188,7 +183,7 @@ def scrape_product_detail(product_url):
 def data_insert(connection_engine, data):
     try:
         with Session(autocommit = False, autoflush = False, bind = connection_engine) as session:
-            new_data = raw_scrap_data(
+            new_data = data(
                 name = data['name']
                 ,detail = data['detail']
                 ,price = data['price']
