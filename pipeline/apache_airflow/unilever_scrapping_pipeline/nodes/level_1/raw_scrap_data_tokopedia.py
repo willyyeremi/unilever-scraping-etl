@@ -71,7 +71,7 @@ def product_validity_count(url, full_check = False):
             return 0, 0
         soup = BeautifulSoup(res.text, 'html.parser')
     else:
-        with driver_maker() as driver:  # Sesuaikan dengan implementasimu
+        with driver_maker() as driver:
             driver.get(url)
             scroll_until_next_button(driver)
             soup = BeautifulSoup(driver.page_source, 'html.parser')
