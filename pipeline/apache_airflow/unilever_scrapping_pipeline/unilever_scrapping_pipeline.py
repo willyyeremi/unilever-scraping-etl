@@ -3,7 +3,6 @@ import datetime
 import os
 
 from airflow import DAG
-from airflow.operators.python import PythonOperator, PythonVirtualenvOperator
 from airflow.hooks.base import BaseHook
 from airflow.decorators import task_group, task
 from sqlalchemy.engine.url  import URL

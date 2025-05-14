@@ -5,7 +5,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from bs4 import BeautifulSoup
 import requests
-from sqlalchemy import create_engine, URL, Column, Integer, Float, String, Date
+from sqlalchemy import Column, Integer, Float, String, Date
 from sqlalchemy.orm import declarative_base, Session
 
 
