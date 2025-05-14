@@ -172,7 +172,7 @@ def scrape_product_detail(product_url):
 def data_insert(connection_engine, data):
     try:
         with Session(autocommit = False, autoflush = False, bind = connection_engine) as session:
-            new_data = raw_scrap_data(
+            new_data = data(
                 name = data['name']
                 ,detail = data['detail']
                 ,price = data['price']
