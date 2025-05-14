@@ -1,9 +1,9 @@
 # Unilever Scrapper: ETL
-This is the repository for data pipeline.
+This is the repository for the data pipeline.
 
 ## Precaution
-- set [database](https://github.com/willyyeremi/unilever-scrapper-database) first, so the component can run.
-- run start-container.bat first to set up needed component.
+- Set [database](https://github.com/willyyeremi/unilever-scrapper-database) first, so the component can run.
+- Run start-container.bat first to set up needed components.
 
-## Pipeline
+## ETL Tools
 1. Apache Airflow
