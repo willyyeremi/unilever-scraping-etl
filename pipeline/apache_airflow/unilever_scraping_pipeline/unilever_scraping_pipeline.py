@@ -1,7 +1,7 @@
 import datetime
 import os
 
-from airflow import DAG
+from airflow.sdk import DAG
 from airflow.hooks.base import BaseHook
 from airflow.decorators import task_group, task
 from sqlalchemy.engine.url  import URL
@@ -47,6 +47,7 @@ conn_url_online_shop = str(create_url(config = conn_config_online_shop, database
 ##################################################
 # callable for dag
 ##################################################
+
 @task.virtualenv(
     task_id = 'raw_scrap_data_tokopedia',
     requirements = [r.strip() for r in open(os.path.join(base_path, "nodes", "level_1", "raw_scrap_data_tokopedia.txt")).readlines() if r.strip() and not r.strip().startswith("#")],

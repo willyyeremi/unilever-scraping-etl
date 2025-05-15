@@ -12,7 +12,12 @@ from sqlalchemy.orm import declarative_base, Session
 # common used variable
 ##################################################
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+SESSION = None
+SESSION_CREATED_AT = None
+SESSION_EXPIRY_SECONDS = 600
+HEADERS = {"User-Agent": "Mozilla/5.0"}
 
 
 ##################################################
@@ -49,6 +54,24 @@ def driver_maker():
     driver = Firefox(service = service, options = options)
     return driver
 
+def get_web_session(url):
+    global SESSION_CREATED_AT
+    with driver_maker() as driver:
+        driver.get(url)
+        session = requests.Session()
+        for cookie in driver.get_cookies():
+            session.cookies.set(cookie['name'], cookie['value'])
+        SESSION_CREATED_AT = time.time()
+        return session
+
+def get_valid_session(url):
+    global SESSION
+    now = time.time()
+    if SESSION is None or (now - SESSION_CREATED_AT) > SESSION_EXPIRY_SECONDS:
+        logger.info(F"INFO - Create new web session")
+        SESSION = get_web_session(url)
+    return SESSION
+
 def scroll_until_next_button(driver):
     while True:
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
@@ -60,15 +83,16 @@ def scroll_until_next_button(driver):
             break 
 
 def product_validity_count(url, full_check = False):
-    headers = {"User-Agent": "Mozilla/5.0"}
+    global HEADERS
     if not full_check:
-        res = requests.get(url, headers=headers)
+        res = requests.get(url, headers = HEADERS)
         if res.status_code != 200:
-            return 0, 0
+            product_validity_count(url, full_check = True)
         soup = BeautifulSoup(res.text, 'html.parser')
     else:
         with driver_maker() as driver:
             driver.get(url)
+            get_web_session(url)
             scroll_until_next_button(driver)
             soup = BeautifulSoup(driver.page_source, 'html.parser')
     all_products = soup.find_all('div', class_ = "css-1sn1xa2")
@@ -82,7 +106,7 @@ def find_last_valid_page(base_url,  step = 10):
         valid, invalid = product_validity_count(f"{base_url}/page/{page}")
         if invalid > 0:
             if valid > 0:
-                logger.info(f"Last valid page: {page}")
+                logger.info(f"INFO - Last valid page: {page}")
                 return page
             else:
                 page -= (step // 2)
@@ -93,12 +117,12 @@ def find_last_valid_page(base_url,  step = 10):
         valid, invalid = product_validity_count(f"{base_url}/page/{page}")
         if valid > 0:
             if invalid > 0:
-                logger.info(f"Last valid page: {page}")
+                logger.info(f"INFO - Last valid page: {page}")
                 return page
             elif invalid == 0:
                 valid, invalid = product_validity_count(f"{base_url}/page/{page}", full_check = True)
                 if invalid > 0:
-                    logger.info(f"Last valid page: {page}")
+                    logger.info(f"INFO - Last valid page: {page}")
                     return page 
                 else:
                     page += 1
@@ -106,7 +130,7 @@ def find_last_valid_page(base_url,  step = 10):
         if valid == 0:
             if status == 1:
                 page -= 1
-                logger.info(f"Last valid page: {page}")
+                logger.info(f"INFO - Last valid page: {page}")
                 return page
             if status == 0:
                 page -= 1
@@ -123,51 +147,49 @@ def extract_active_product_links(soup, url):
                 link_list.append(link_tag.get('href'))
         return link_list
     except Exception as e:
-        logger.error(f"extract_active_product_links() error: {e} | url: {url}")
+        logger.error(f"ERROR - extract_active_product_links() error: {e} | url: {url}")
 
 def collect_product_links_from_catalog_page(url):
     try:
         with driver_maker() as driver:
             driver.get(url)
+            get_valid_session(url)
             time.sleep(3)
             scroll_until_next_button(driver = driver)
             soup = BeautifulSoup(driver.page_source, 'html.parser')
             driver.quit()
             return extract_active_product_links(soup, url)
     except Exception as e:
-        logger.error(f"collect_product_links_from_catalog_page() error: {e} | url: {url}")
+        logger.error(f"ERROR - collect_product_links_from_catalog_page() error: {e} | url: {url}")
 
-def is_page_empty(soup) -> bool:
+def is_page_empty(soup, product_url) -> bool:
     try:
         name_element = soup.find('h1', class_='css-j63za0') if soup.find('h1', class_='css-j63za0') else None
         price_element = soup.find('div', class_='price') if soup.find('div', class_='price') else None
         if name_element is None or price_element is None:
+            logger.info(f"INFO - Page is empty | {product_url}")
             return True
         return False
     except Exception as e:
-        logger.error(f"is_page_empty() error: {e}")
+        logger.error(f"ERROR - is_page_empty() error: {e}")
         
 def scrape_product_detail(product_url):
-    headers = {"User-Agent": "Mozilla/5.0"}
+    global HEADERS
+    global SESSION
     current_timestamp = datetime.strftime(datetime.now(), '%Y-%m-%d')
     try:
-        selenium_action = 0
         product_data = {}
-        res = requests.get(product_url, headers = headers)
+        res = requests.get(product_url, headers = HEADERS)
         if res.status_code != 200:
-            logger.info(f"Status code: {res.status_code} ({res.reason}) | url: {product_url}")
-        request_soup = BeautifulSoup(res.text, 'html.parser')
-        request_soup_body = BeautifulSoup(str(request_soup.body), 'html.parser')
-        page_empty_status = is_page_empty(request_soup_body)
-        if page_empty_status == True or res.status_code == 410:
-            selenium_action = 1
-        if selenium_action == 1:
-            with driver_maker() as driver:
-                driver.get(product_url)
-                time.sleep(3)
-                soup = BeautifulSoup(driver.page_source, 'html.parser')
-        else:
-            soup = request_soup
+            logger.info(f"INFO - Status code: {res.status_code} ({res.reason}) | url: {product_url}")
+        soup = BeautifulSoup(res.text, 'html.parser')
+        soup_body = BeautifulSoup(str(soup.body), 'html.parser')
+        page_empty_status = is_page_empty(soup_body, product_url)
+        if page_empty_status == True:
+            logger.info(f"INFO - Page is empty | url: {product_url}")
+            session = get_web_session(product_url)
+            res = session.get(product_url, headers = HEADERS)
+            soup = BeautifulSoup(res.text, 'html.parser')
         product_data['name'] = soup.find('h1', class_='css-j63za0').text.strip()
         product_data['detail'] = soup.select_one('div[data-testid="lblPDPDescriptionProduk"]').text if soup.select_one('div[data-testid="lblPDPDescriptionProduk"]') else None
         product_data['price'] = int(soup.find('div', class_='price').text.replace("Rp", "").replace(".", ""))
@@ -177,7 +199,7 @@ def scrape_product_detail(product_url):
         product_data['createdate'] = current_timestamp
         return product_data
     except Exception as e:
-        logger.error(f"scrape_product_detail() error: {e} | url: {product_url} | data: {product_data}")
+        logger.error(f"ERROR - scrape_product_detail() error: {e} | url: {product_url} | data: {product_data}")
 
 def data_insert(connection_engine, data):
     try:
@@ -194,7 +216,7 @@ def data_insert(connection_engine, data):
             session.add(new_data)
             session.commit()
     except Exception as e:
-        logger.error(f"data_insert() error: {e} | data: {data}")
+        logger.error(f"ERROR - data_insert() error: {e} | data: {data}")
 
 def collect_active_product_links_parallel_executor(base_url, last_valid_page, connection_engine, num_processes = 5):
     try:
@@ -211,7 +233,7 @@ def collect_active_product_links_parallel_executor(base_url, last_valid_page, co
                         product_data = finished_product.result()
                         data_insert(connection_engine, product_data)
     except Exception as e:
-        logger.error(f"collect_active_product_links_parallel_executor() error: {e}")
+        logger.error(f"ERROR - collect_active_product_links_parallel_executor() error: {e}")
 
 
 ##################################################
@@ -220,5 +242,6 @@ def collect_active_product_links_parallel_executor(base_url, last_valid_page, co
 
 def run_pipeline(connection_engine):
     engine = connection_engine
+    get_web_session("https://www.tokopedia.com/unilever/product")
     last_valid_page = find_last_valid_page("https://www.tokopedia.com/unilever/product")
     collect_active_product_links_parallel_executor("https://www.tokopedia.com/unilever/product", last_valid_page, engine, num_processes = 5)
