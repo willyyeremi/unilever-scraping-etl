@@ -47,7 +47,6 @@ conn_url_online_shop = str(create_url(config = conn_config_online_shop, database
 ##################################################
 # callable for dag
 ##################################################
-
 @task.virtualenv(
     task_id = 'raw_scrap_data_tokopedia',
     requirements = [r.strip() for r in open(os.path.join(base_path, "nodes", "level_1", "raw_scrap_data_tokopedia.txt")).readlines() if r.strip() and not r.strip().startswith("#")],
@@ -62,10 +61,18 @@ def raw_scrap_data_tokopedia(connection_url, real_base_path):
     from nodes.level_1 import raw_scrap_data_tokopedia
     
     with Popen(['Xvfb', ':99', '-screen', '0', '1920x1080x24']) as xvfb_process:
-        os.environ["DISPLAY"] = ":99" 
         sleep(5)
         conn_engine_online_shop = create_engine(connection_url)
         raw_scrap_data_tokopedia.run_pipeline(conn_engine_online_shop)
+
+
+##################################################
+# task group
+##################################################
+
+@task_group()
+def level_1():
+    raw_scrap_data_tokopedia_pipeline_task = raw_scrap_data_tokopedia(conn_url_online_shop, base_path)
 
 
 ##################################################
@@ -89,8 +96,6 @@ dag = DAG(
 
 with dag:
     
-    @task_group()
-    def level_1():
-        raw_scrap_data_tokopedia_pipeline_task = raw_scrap_data_tokopedia(conn_url_online_shop, base_path)
-    
-    level_1()
+    level_1_group_task = level_1()
+
+    level_1_group_task

@@ -1,5 +1,6 @@
 import time
 from datetime import datetime
+import logging
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from bs4 import BeautifulSoup
@@ -7,6 +8,8 @@ import requests
 from sqlalchemy import Column, Integer, Float, String, Date
 from sqlalchemy.orm import declarative_base, Session
 
+
+logger = logging.getLogger(__name__)
 
 ##################################################
 # database table object
@@ -75,6 +78,7 @@ def find_last_valid_page(base_url,  step = 10):
         valid, invalid = product_validity_count(f"{base_url}/page/{page}")
         if invalid > 0:
             if valid > 0:
+                logger.info(f"Last valid page: {page}")
                 return page
             else:
                 page -= (step // 2)
@@ -85,10 +89,12 @@ def find_last_valid_page(base_url,  step = 10):
         valid, invalid = product_validity_count(f"{base_url}/page/{page}")
         if valid > 0:
             if invalid > 0:
+                logger.info(f"Last valid page: {page}")
                 return page
             elif invalid == 0:
                 valid, invalid = product_validity_count(f"{base_url}/page/{page}", full_check = True)
                 if invalid > 0:
+                    logger.info(f"Last valid page: {page}")
                     return page 
                 else:
                     page += 1
@@ -96,6 +102,7 @@ def find_last_valid_page(base_url,  step = 10):
         if valid == 0:
             if status == 1:
                 page -= 1
+                logger.info(f"Last valid page: {page}")
                 return page
             if status == 0:
                 page -= 1
@@ -112,7 +119,7 @@ def extract_active_product_links(soup, url):
                 link_list.append(link_tag.get('href'))
         return link_list
     except Exception as e:
-        print(f"extract_active_product_links() error: {e}\n url: {url}")
+        logger.error(f"extract_active_product_links() error: {e} | url: {url}")
 
 def collect_product_links_from_catalog_page(url):
     try:
@@ -124,7 +131,7 @@ def collect_product_links_from_catalog_page(url):
             driver.quit()
             return extract_active_product_links(soup, url)
     except Exception as e:
-        print(f"collect_product_links_from_catalog_page() error: {e}\n url: {url}")
+        logger.error(f"collect_product_links_from_catalog_page() error: {e} | url: {url}")
 
 def is_page_empty(soup) -> bool:
     try:
@@ -134,7 +141,7 @@ def is_page_empty(soup) -> bool:
             return True
         return False
     except Exception as e:
-        print(f"is_page_empty() error: {e}")
+        logger.error(f"is_page_empty() error: {e}")
         
 def scrape_product_detail(product_url):
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -144,7 +151,7 @@ def scrape_product_detail(product_url):
         product_data = {}
         res = requests.get(product_url, headers = headers)
         if res.status_code != 200:
-            print(f"Status code: {res.status_code} ({res.reason})\n url: {product_url}")
+            logger.info(f"Status code: {res.status_code} ({res.reason}) | url: {product_url}")
         request_soup = BeautifulSoup(res.text, 'html.parser')
         request_soup_body = BeautifulSoup(str(request_soup.body), 'html.parser')
         page_empty_status = is_page_empty(request_soup_body)
@@ -166,7 +173,7 @@ def scrape_product_detail(product_url):
         product_data['createdate'] = current_timestamp
         return product_data
     except Exception as e:
-        print(f"scrape_product_detail() error: {e}\n url: {product_url}\n data: {product_data}")
+        logger.error(f"scrape_product_detail() error: {e} | url: {product_url} | data: {product_data}")
 
 def data_insert(connection_engine, data):
     try:
@@ -183,7 +190,7 @@ def data_insert(connection_engine, data):
             session.add(new_data)
             session.commit()
     except Exception as e:
-        print(f"data_insert() error: {e}\n data: {data}")
+        logger.error(f"data_insert() error: {e} | data: {data}")
 
 def collect_active_product_links_parallel_executor(base_url, last_valid_page, connection_engine, num_processes = 5):
     try:
@@ -200,7 +207,7 @@ def collect_active_product_links_parallel_executor(base_url, last_valid_page, co
                         product_data = finished_product.result()
                         data_insert(connection_engine, product_data)
     except Exception as e:
-        print(f"collect_active_product_links_parallel_executor() error: {e}")
+        logger.error(f"collect_active_product_links_parallel_executor() error: {e}")
 
 
 ##################################################
@@ -210,5 +217,4 @@ def collect_active_product_links_parallel_executor(base_url, last_valid_page, co
 def run_pipeline(connection_engine):
     engine = connection_engine
     last_valid_page = find_last_valid_page("https://www.tokopedia.com/unilever/product")
-    print(f"Last valid page: {last_valid_page}")
     collect_active_product_links_parallel_executor("https://www.tokopedia.com/unilever/product", last_valid_page, engine, num_processes = 5)
