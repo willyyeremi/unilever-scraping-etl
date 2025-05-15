@@ -5,8 +5,8 @@ services:
     build:
       context: .
       dockerfile: ./dockerfile/dockerfile.airflow
-    image: unilever-scrapper-airflow
-    container_name: unilever-scrapper-airflow-scheduler
+    image: unilever-scraping-airflow
+    container_name: unilever-scraping-airflow-scheduler
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://admin:admin@postgresql:5432/airflow_database
@@ -28,8 +28,8 @@ services:
     networks:
       - shared-network
   airflow-webserver:
-    image: unilever-scrapper-airflow
-    container_name: unilever-scrapper-airflow-webserver
+    image: unilever-scraping-airflow
+    container_name: unilever-scraping-airflow-webserver
     depends_on:
       - airflow-scheduler
     environment:
