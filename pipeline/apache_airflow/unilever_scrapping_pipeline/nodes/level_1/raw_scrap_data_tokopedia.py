@@ -1,5 +1,6 @@
 import os
 import time
+import logging
 from datetime import datetime
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
@@ -8,6 +9,8 @@ import requests
 from sqlalchemy import create_engine, URL, Column, Integer, Float, String, Date
 from sqlalchemy.orm import declarative_base, Session
 
+
+logger = logging.getLogger(__name__)
 
 ##################################################
 # database table object
@@ -124,7 +127,7 @@ def extract_active_product_links(soup, url):
                 link_list.append(link_tag.get('href'))
         return link_list
     except Exception as e:
-        print(f"extract_active_product_links() error: {e}\n url: {url}")
+        logger.error(f"extract_active_product_links() error: {e} | url: {url}")
 
 def collect_product_links_from_catalog_page(url):
     try:
@@ -136,7 +139,7 @@ def collect_product_links_from_catalog_page(url):
             driver.quit()
             return extract_active_product_links(soup, url)
     except Exception as e:
-        print(f"collect_product_links_from_catalog_page() error: {e}\n url: {url}")
+        logger.error(f"collect_product_links_from_catalog_page() error: {e} | url: {url}")
 
 def is_page_empty(soup) -> bool:
     try:
@@ -146,7 +149,7 @@ def is_page_empty(soup) -> bool:
             return True
         return False
     except Exception as e:
-        print(f"is_page_empty() error: {e}")
+        logger.error(f"is_page_empty() error: {e}")
         
 def scrape_product_detail(product_url):
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -178,7 +181,7 @@ def scrape_product_detail(product_url):
         product_data['createdate'] = current_timestamp
         return product_data
     except Exception as e:
-        print(f"scrape_product_detail() error: {e}\n url: {product_url}\n data: {product_data}")
+        logger.error(f"scrape_product_detail() error: {e} | url: {product_url} | data: {product_data}")
 
 def data_insert(connection_engine, data):
     try:
@@ -195,7 +198,7 @@ def data_insert(connection_engine, data):
             session.add(new_data)
             session.commit()
     except Exception as e:
-        print(f"data_insert() error: {e}\n data: {data}")
+        logger.error(f"data_insert() error: {e} | data: {data}")
 
 def collect_active_product_links_parallel_executor(base_url, last_valid_page, connection_engine, num_processes = 5):
     try:
@@ -212,7 +215,7 @@ def collect_active_product_links_parallel_executor(base_url, last_valid_page, co
                         product_data = finished_product.result()
                         data_insert(connection_engine, product_data)
     except Exception as e:
-        print(f"collect_active_product_links_parallel_executor() error: {e}")
+        logger.error(f"collect_active_product_links_parallel_executor() error: {e}")
 
 
 ##################################################
@@ -222,7 +225,7 @@ def collect_active_product_links_parallel_executor(base_url, last_valid_page, co
 def run_pipeline(connection_engine):
     engine = connection_engine
     last_valid_page = find_last_valid_page("https://www.tokopedia.com/unilever/product")
-    print(f"Last valid page: {last_valid_page}")
+    logger.info(f"Last valid page: {last_valid_page}")
     collect_active_product_links_parallel_executor("https://www.tokopedia.com/unilever/product", last_valid_page, engine, num_processes = 5)
 
 
