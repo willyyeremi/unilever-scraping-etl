@@ -80,9 +80,9 @@ def level_1():
 ##################################################
 
 dag = DAG(
-    dag_id = "unilever_scrapping_pipeline",
-    dag_display_name  = " Unilever Scrapping Pipeline",
-    tags = ["web-scrapping"],
+    dag_id = "unilever_scraping_pipeline",
+    dag_display_name  = " Unilever Scraping Pipeline",
+    tags = ["web-scraping"],
     schedule_interval = None,
     start_date = datetime.datetime(2024, 1, 1),
     catchup = False,
