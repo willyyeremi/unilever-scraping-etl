@@ -14,9 +14,6 @@ from sqlalchemy.orm import declarative_base, Session
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-SESSION = None
-SESSION_CREATED_AT = None
-SESSION_EXPIRY_SECONDS = 600
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
 
@@ -54,24 +51,6 @@ def driver_maker():
     driver = Firefox(service = service, options = options)
     return driver
 
-def get_web_session(url):
-    global SESSION_CREATED_AT
-    with driver_maker() as driver:
-        driver.get(url)
-        session = requests.Session()
-        for cookie in driver.get_cookies():
-            session.cookies.set(cookie['name'], cookie['value'])
-        SESSION_CREATED_AT = time.time()
-        return session
-
-def get_valid_session(url):
-    global SESSION
-    now = time.time()
-    if SESSION is None or (now - SESSION_CREATED_AT) > SESSION_EXPIRY_SECONDS:
-        logger.info(F"INFO - Create new web session")
-        SESSION = get_web_session(url)
-    return SESSION
-
 def scroll_until_next_button(driver):
     while True:
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
@@ -92,7 +71,6 @@ def product_validity_count(url, full_check = False):
     else:
         with driver_maker() as driver:
             driver.get(url)
-            get_web_session(url)
             scroll_until_next_button(driver)
             soup = BeautifulSoup(driver.page_source, 'html.parser')
     all_products = soup.find_all('div', class_ = "css-1sn1xa2")
@@ -153,11 +131,9 @@ def collect_product_links_from_catalog_page(url):
     try:
         with driver_maker() as driver:
             driver.get(url)
-            get_valid_session(url)
             time.sleep(3)
             scroll_until_next_button(driver = driver)
             soup = BeautifulSoup(driver.page_source, 'html.parser')
-            driver.quit()
             return extract_active_product_links(soup, url)
     except Exception as e:
         logger.error(f"ERROR - collect_product_links_from_catalog_page() error: {e} | url: {url}")
@@ -175,7 +151,6 @@ def is_page_empty(soup, product_url) -> bool:
         
 def scrape_product_detail(product_url):
     global HEADERS
-    global SESSION
     current_timestamp = datetime.strftime(datetime.now(), '%Y-%m-%d')
     try:
         product_data = {}
@@ -187,9 +162,10 @@ def scrape_product_detail(product_url):
         page_empty_status = is_page_empty(soup_body, product_url)
         if page_empty_status == True:
             logger.info(f"INFO - Page is empty | url: {product_url}")
-            session = get_web_session(product_url)
-            res = session.get(product_url, headers = HEADERS)
-            soup = BeautifulSoup(res.text, 'html.parser')
+            with driver_maker() as driver:
+                driver.get(product_url)
+                time.sleep(3)
+                soup = BeautifulSoup(res.text, 'html.parser')
         product_data['name'] = soup.find('h1', class_='css-j63za0').text.strip()
         product_data['detail'] = soup.select_one('div[data-testid="lblPDPDescriptionProduk"]').text if soup.select_one('div[data-testid="lblPDPDescriptionProduk"]') else None
         product_data['price'] = int(soup.find('div', class_='price').text.replace("Rp", "").replace(".", ""))
@@ -242,6 +218,6 @@ def collect_active_product_links_parallel_executor(base_url, last_valid_page, co
 
 def run_pipeline(connection_engine):
     engine = connection_engine
-    get_web_session("https://www.tokopedia.com/unilever/product")
     last_valid_page = find_last_valid_page("https://www.tokopedia.com/unilever/product")
     collect_active_product_links_parallel_executor("https://www.tokopedia.com/unilever/product", last_valid_page, engine, num_processes = 5)
+
