@@ -20,16 +20,18 @@ services:
       - ./etc/apache_airflow:/home/airflow/initial_setup_tools
     command: >
       bash -c "
+      airflow version &&     
       airflow db migrate && 
       airflow users create --username admin --password admin --firstname admin --lastname admin --role Admin --email admin@example.com || echo 'User admin already exists' && 
       python /home/airflow/initial_setup_tools/add_connection.py &&
       exec airflow scheduler
+
       "
     networks:
       - shared-network
-  airflow-webserver:
+  airflow-api-server:
     image: unilever-scraping-airflow
-    container_name: unilever-scraping-airflow-webserver
+    container_name: unilever-scraping-airflow-api-server
     depends_on:
       - airflow-scheduler
     environment:
@@ -43,12 +45,48 @@ services:
       - ./etc/apache_airflow/webserver_config.py:/opt/airflow/webserver_config.py
     command: >
       bash -c "
-      airflow webserver
+      airflow version && 
+      airflow api-server
+      "
+    networks:
+      - shared-network
+  airflow-dag-processor:
+    image: unilever-scraping-airflow
+    container_name: unilever-scraping-airflow-dag-processor
+    depends_on:
+      - airflow-scheduler
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://admin:admin@postgresql:5432/airflow_database
+      AIRFLOW__CORE__FERNET_KEY: '4uBG5WCiywOYDzv_uesOLwXbL-CEx5PneA1FUZzTnFc='
+      AIRFLOW__WEBSERVER__SECRET_KEY: '7088a7040b2a62561888313540931945'
+    command: >
+      bash -c "
+      airflow version && 
+      airflow dag-processor
+      "
+    networks:
+      - shared-network
+
+  airflow-triggerer:
+    image: unilever-scraping-airflow
+    container_name: unilever-scraping-airflow-triggerer
+    depends_on:
+      - airflow-scheduler
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://admin:admin@postgresql:5432/airflow_database
+      AIRFLOW__CORE__FERNET_KEY: '4uBG5WCiywOYDzv_uesOLwXbL-CEx5PneA1FUZzTnFc='
+      AIRFLOW__WEBSERVER__SECRET_KEY: '7088a7040b2a62561888313540931945'
+    command: >
+      bash -c "
+      airflow version && 
+      airflow triggerer
       "
     networks:
       - shared-network
 
 networks:
   shared-network:
-    name: unilever-network
+    name: unilever-scraping-network
     external: true
