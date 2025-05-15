@@ -9,10 +9,9 @@ services:
     container_name: unilever-scraping-airflow-scheduler
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://admin:admin@postgresql:5432/airflow_database
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow_admin:airflow_admin@postgresql:5432/airflow_database
       AIRFLOW__CORE__FERNET_KEY: '4uBG5WCiywOYDzv_uesOLwXbL-CEx5PneA1FUZzTnFc='
       AIRFLOW__WEBSERVER__SECRET_KEY: '7088a7040b2a62561888313540931945'
-      AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
     volumes:
       - ./data/apache_airflow/logs:/opt/airflow/logs
       - ./data/apache_airflow/plugins:/opt/airflow/plugins
@@ -22,10 +21,9 @@ services:
       bash -c "
       airflow version &&     
       airflow db migrate && 
-      airflow users create --username admin --password admin --firstname admin --lastname admin --role Admin --email admin@example.com || echo 'User admin already exists' && 
+      airflow users create --username admin --password admin --firstname admin --lastname admin --role Admin --email admin@example.com || echo 'failed create "admin" user account' && 
       python /home/airflow/initial_setup_tools/add_connection.py &&
       exec airflow scheduler
-
       "
     networks:
       - shared-network
@@ -36,7 +34,7 @@ services:
       - airflow-scheduler
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://admin:admin@postgresql:5432/airflow_database
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow_admin:airflow_admin@postgresql:5432/airflow_database
       AIRFLOW__CORE__FERNET_KEY: '4uBG5WCiywOYDzv_uesOLwXbL-CEx5PneA1FUZzTnFc='
       AIRFLOW__WEBSERVER__SECRET_KEY: '7088a7040b2a62561888313540931945'
     ports:
@@ -46,7 +44,8 @@ services:
     command: >
       bash -c "
       airflow version && 
-      airflow api-server
+      airflow db migrate && 
+      airflow api-server --port 8080
       "
     networks:
       - shared-network
@@ -57,17 +56,22 @@ services:
       - airflow-scheduler
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://admin:admin@postgresql:5432/airflow_database
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow_admin:airflow_admin@postgresql:5432/airflow_database
       AIRFLOW__CORE__FERNET_KEY: '4uBG5WCiywOYDzv_uesOLwXbL-CEx5PneA1FUZzTnFc='
       AIRFLOW__WEBSERVER__SECRET_KEY: '7088a7040b2a62561888313540931945'
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
+    volumes:
+      - ./data/apache_airflow/logs:/opt/airflow/logs
+      - ./data/apache_airflow/plugins:/opt/airflow/plugins
+      - ./pipeline/apache_airflow:/opt/airflow/dags
     command: >
       bash -c "
       airflow version && 
+      airflow db migrate && 
       airflow dag-processor
       "
     networks:
       - shared-network
-
   airflow-triggerer:
     image: unilever-scraping-airflow
     container_name: unilever-scraping-airflow-triggerer
@@ -75,12 +79,17 @@ services:
       - airflow-scheduler
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://admin:admin@postgresql:5432/airflow_database
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow_admin:airflow_admin@postgresql:5432/airflow_database
       AIRFLOW__CORE__FERNET_KEY: '4uBG5WCiywOYDzv_uesOLwXbL-CEx5PneA1FUZzTnFc='
       AIRFLOW__WEBSERVER__SECRET_KEY: '7088a7040b2a62561888313540931945'
+    volumes:
+      - ./data/apache_airflow/logs:/opt/airflow/logs
+      - ./data/apache_airflow/plugins:/opt/airflow/plugins
+      - ./pipeline/apache_airflow:/opt/airflow/dags
     command: >
       bash -c "
       airflow version && 
+      airflow db migrate && 
       airflow triggerer
       "
     networks:
