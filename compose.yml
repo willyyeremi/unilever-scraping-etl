@@ -28,8 +28,6 @@ services:
   airflow-scheduler:
     <<: *airflow-common
     container_name: unilever-scraping-airflow-scheduler
-    ports:
-      - "8793:8793"
     volumes:
       - ./data/apache_airflow/logs:/opt/airflow/logs
       - ./data/apache_airflow/plugins:/opt/airflow/plugins
