@@ -3,8 +3,10 @@ from datetime import datetime
 import logging
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
-from bs4 import BeautifulSoup
 import requests
+from selenium.webdriver import Firefox, FirefoxOptions
+from selenium.webdriver.firefox.service import Service
+from bs4 import BeautifulSoup
 from sqlalchemy import Column, Integer, Float, String, Date
 from sqlalchemy.orm import declarative_base, Session
 
@@ -40,8 +42,6 @@ class raw_scrap_data(base):
 ##################################################
 
 def driver_maker():
-    from selenium.webdriver import Firefox, FirefoxOptions
-    from selenium.webdriver.firefox.service import Service
     service = Service(executable_path = "/home/airflow/browser_driver/geckodriver")
     options = FirefoxOptions()
     options.add_argument("--no-sandbox")
