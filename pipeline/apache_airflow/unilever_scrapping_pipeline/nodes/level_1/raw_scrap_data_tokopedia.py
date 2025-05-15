@@ -8,8 +8,12 @@ import requests
 from sqlalchemy import Column, Integer, Float, String, Date
 from sqlalchemy.orm import declarative_base, Session
 
+##################################################
+# common used variable
+##################################################
 
 logger = logging.getLogger(__name__)
+
 
 ##################################################
 # database table object
