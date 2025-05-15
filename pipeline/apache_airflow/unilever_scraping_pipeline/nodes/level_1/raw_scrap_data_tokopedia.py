@@ -143,7 +143,7 @@ def is_page_empty(soup, product_url) -> bool:
         name_element = soup.find('h1', class_='css-j63za0') if soup.find('h1', class_='css-j63za0') else None
         price_element = soup.find('div', class_='price') if soup.find('div', class_='price') else None
         if name_element is None or price_element is None:
-            logger.info(f"INFO - Page is empty | {product_url}")
+            logger.info(f"INFO - Page is empty | url: {product_url}")
             return True
         return False
     except Exception as e:
@@ -161,11 +161,10 @@ def scrape_product_detail(product_url):
         soup_body = BeautifulSoup(str(soup.body), 'html.parser')
         page_empty_status = is_page_empty(soup_body, product_url)
         if page_empty_status == True:
-            logger.info(f"INFO - Page is empty | url: {product_url}")
             with driver_maker() as driver:
                 driver.get(product_url)
                 time.sleep(3)
-                soup = BeautifulSoup(res.text, 'html.parser')
+                soup = BeautifulSoup(driver.page_source, 'html.parser')
         product_data['name'] = soup.find('h1', class_='css-j63za0').text.strip()
         product_data['detail'] = soup.select_one('div[data-testid="lblPDPDescriptionProduk"]').text if soup.select_one('div[data-testid="lblPDPDescriptionProduk"]') else None
         product_data['price'] = int(soup.find('div', class_='price').text.replace("Rp", "").replace(".", ""))
