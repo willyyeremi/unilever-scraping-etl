@@ -10,7 +10,12 @@ from sqlalchemy import create_engine, URL, Column, Integer, Float, String, Date
 from sqlalchemy.orm import declarative_base, Session
 
 
+##################################################
+# common used variable
+##################################################
+
 logger = logging.getLogger(__name__)
+
 
 ##################################################
 # database table object
@@ -85,25 +90,27 @@ def product_validity_count(url, full_check = False):
 
 def find_last_valid_page(base_url,  step = 10):
     page = step
-    # Naik hingga ketemu halaman yang hanya berisi invalid
     while True:
         valid, invalid = product_validity_count(f"{base_url}/page/{page}")
         if invalid > 0:
             if valid > 0:
-                return page  # Halaman campuran valid+invalid => halaman terakhir ketemu
+                logger.info(f"Last valid page: {page}")
+                return page
             else:
                 page -= (step // 2)
-                break  # Hanya invalid, kita mundur nanti
+                break
         page += step
     status = 0
     while True:
         valid, invalid = product_validity_count(f"{base_url}/page/{page}")
         if valid > 0:
             if invalid > 0:
-                return page  # Halaman campuran => terakhir
+                logger.info(f"Last valid page: {page}")
+                return page
             elif invalid == 0:
                 valid, invalid = product_validity_count(f"{base_url}/page/{page}", full_check = True)
                 if invalid > 0:
+                    logger.info(f"Last valid page: {page}")
                     return page 
                 else:
                     page += 1
@@ -111,6 +118,7 @@ def find_last_valid_page(base_url,  step = 10):
         if valid == 0:
             if status == 1:
                 page -= 1
+                logger.info(f"Last valid page: {page}")
                 return page
             if status == 0:
                 page -= 1
@@ -159,7 +167,7 @@ def scrape_product_detail(product_url):
         product_data = {}
         res = requests.get(product_url, headers = headers)
         if res.status_code != 200:
-            print(f"Status code: {res.status_code} ({res.reason})\n url: {product_url}")
+            logger.info(f"Status code: {res.status_code} ({res.reason}) | url: {product_url}")
         request_soup = BeautifulSoup(res.text, 'html.parser')
         request_soup_body = BeautifulSoup(str(request_soup.body), 'html.parser')
         page_empty_status = is_page_empty(request_soup_body)
