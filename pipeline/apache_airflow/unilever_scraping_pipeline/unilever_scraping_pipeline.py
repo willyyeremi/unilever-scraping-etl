@@ -55,16 +55,23 @@ conn_url_online_shop = str(create_url(config = conn_config_online_shop, database
 )
 def raw_scrap_data_tokopedia(connection_url, real_base_path):
     import sys
+    import os
+    import signal
     from time import sleep
     from subprocess import Popen
     from sqlalchemy import create_engine
     sys.path.append(real_base_path)
     from nodes.level_1 import raw_scrap_data_tokopedia
     
-    with Popen(['Xvfb', ':99', '-screen', '0', '1920x1080x24']) as xvfb_process:
+    try:
+        xvfb_process = Popen(['Xvfb', ':99', '-screen', '0', '1920x1080x24'])
+        os.environ["DISPLAY"] = ":99"
         sleep(5)
         conn_engine_online_shop = create_engine(connection_url)
         raw_scrap_data_tokopedia.run_pipeline(conn_engine_online_shop)
+    finally:
+        xvfb_process.send_signal(signal.SIGTERM)
+        xvfb_process.wait()
 
 
 ##################################################
