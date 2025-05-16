@@ -1,4 +1,4 @@
-FROM apache/airflow:latest
+FROM apache/airflow:3.0.1
 USER root
 RUN apt-get update && \
     apt-get install -y wget unzip firefox-esr xvfb libpq-dev postgresql-client && \
