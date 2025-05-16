@@ -8,3 +8,6 @@ This is the repository for the data pipeline.
 
 ## ETL Tools
 1. Apache Airflow
+
+## Notes
+- redis is used for rate limiter to api webserver, with database 0 to be specified
