@@ -80,7 +80,7 @@ def raw_scrap_data_tokopedia(connection_url, real_base_path):
 
 @task_group()
 def level_1():
-    raw_scrap_data_tokopedia_pipeline_task = raw_scrap_data_tokopedia(conn_url_online_shop, base_path)
+    raw_scrap_data_tokopedia(conn_url_online_shop, base_path)
 
 
 ##################################################
