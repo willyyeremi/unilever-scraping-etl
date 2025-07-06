@@ -26,7 +26,7 @@ HEADERS = {"User-Agent": "Mozilla/5.0"}
 
 base = declarative_base()
 class raw_scrap_data(base):
-    __tablename__ = 'raw_scrap_data'
+    __tablename__ = 'tr_raw_scrap_data'
     __table_args__ = {'schema': 'main'}
     id = Column(Integer, primary_key = True)
     name = Column(String)
