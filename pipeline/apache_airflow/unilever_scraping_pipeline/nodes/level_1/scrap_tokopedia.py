@@ -25,7 +25,7 @@ HEADERS = {"User-Agent": "Mozilla/5.0"}
 ##################################################
 
 base = declarative_base()
-class raw_scrap_data(base):
+class tr_raw_scrap_data(base):
     __tablename__ = 'tr_raw_scrap_data'
     __table_args__ = {'schema': 'main'}
     id = Column(Integer, primary_key = True)
@@ -184,7 +184,7 @@ def scrape_product_detail(product_url):
 def data_insert(connection_engine, data):
     try:
         with Session(autocommit = False, autoflush = False, bind = connection_engine) as session:
-            new_data = raw_scrap_data(
+            new_data = tr_raw_scrap_data(
                 name = data['name']
                 ,detail = data['detail']
                 ,price = data['price']
