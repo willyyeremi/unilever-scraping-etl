@@ -12,7 +12,7 @@ x-airflow-common:
     AIRFLOW__CORE__EXECUTION_API_SERVER_URL: 'http://unilever-scraping-airflow-api-server:8080/execution/'
     AIRFLOW__CORE__FERNET_KEY:  ${FERNET_KEY}
     AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
-    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow_admin:airflow_admin@postgresql:5432/airflow_database
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_DB_USERNAME}:${AIRFLOW_ODS_PASSWORD}@${AIRFLOW_ODS_HOST}:${AIRFLOW_ODS_PORT}/${AIRFLOW_ODS_DBNAME}
     AIRFLOW__LOGGING__WORKER_LOG_SERVER_HOST: airflow-scheduler
     AIRFLOW__WEBSERVER__SECRET_KEY: ${SECRET_KEY}
   volumes:
@@ -37,7 +37,6 @@ services:
       bash -c "
       airflow version &&     
       airflow db migrate && 
-      airflow users create --username admin --password admin --firstname admin --lastname admin --role Admin --email admin@example.com || echo 'failed create "admin" user account' && 
       python /home/airflow/initial_setup_tools/add_connection.py &&
       exec airflow scheduler
       "

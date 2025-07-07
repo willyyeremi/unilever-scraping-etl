@@ -30,8 +30,13 @@ unilever_shop_links = ["rumah-bersih-unilever", "unilever-hair-beauty-studio", "
 software_names = [SoftwareName.CHROME.value]
 operating_systems = [OperatingSystem.WINDOWS.value, OperatingSystem.LINUX.value] 
 user_agent_rotator = UserAgent(software_names=software_names, operating_systems=operating_systems, limit=100)
-user_agent = user_agent_rotator.get_random_user_agent()
-HEADERS = {"User-Agent": f"{user_agent}"}
+
+# HEADERS = {
+#     "User-Agent": f"{user_agent_rotator.get_random_user_agent()}"
+# }
+HEADERS = {
+    "User-Agent": "Mozilla/5.0"
+}
 
 
 ##################################################
@@ -58,14 +63,12 @@ class tr_raw_scrap_data(base):
 
 def driver_maker():
     service = Service(executable_path = "/home/airflow/browser_driver/geckodriver")
-    # service = Service(executable_path = "./pipeline/apache_airflow/unilever_scraping_pipeline/nodes/level_1/geckodriver.exe")
     options = FirefoxOptions()
-    # options.binary_location = "C:/Program Files/Mozilla Firefox/firefox.exe"
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
     options.add_argument("--display=:99")
-    options.add_argument(f"--user-agent={user_agent}")
+    options.add_argument(f"--user-agent={user_agent_rotator.get_random_user_agent()}")
     driver = Firefox(service = service, options = options)
     return driver
 
@@ -86,7 +89,7 @@ def scroll_until_next_button(driver):
 def product_validity_count(url, full_check = False):
     global HEADERS
     if not full_check:
-        res = requests.get(url, headers = HEADERS)
+        res = requests.Session().get(url = url, headers = HEADERS)
         if res.status_code != 200:
             product_validity_count(url, full_check = True)
         soup = BeautifulSoup(res.text, 'html.parser')
@@ -182,7 +185,7 @@ def scrape_product_detail(product_url):
     current_timestamp = datetime.strftime(datetime.now(), '%Y-%m-%d')
     try:
         product_data = {}
-        res = requests.get(product_url, headers = HEADERS)
+        res = requests.Session().get(url = product_url, headers = HEADERS)
         if res.status_code != 200:
             logger.info(f"Status code: {res.status_code} ({res.reason}) | url: {product_url}")
         soup = BeautifulSoup(res.text, 'html.parser')
@@ -252,3 +255,4 @@ def run_pipeline(connection_engine):
     for link in unilever_shop_links:
         last_valid_page = find_last_valid_page(f"https://www.tokopedia.com/{link}/product")
         collect_active_product_links_parallel_executor(f"https://www.tokopedia.com/{link}/product", last_valid_page, engine, num_processes = 5)
+
