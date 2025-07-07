@@ -3,6 +3,8 @@ from datetime import datetime
 import logging
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
+from random_user_agent.user_agent import UserAgent
+from random_user_agent.params import SoftwareName, OperatingSystem
 import requests
 from selenium.webdriver import Firefox, FirefoxOptions
 from selenium.webdriver.firefox.service import Service
@@ -17,7 +19,19 @@ from sqlalchemy.orm import declarative_base, Session
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-HEADERS = {"User-Agent": "Mozilla/5.0"}
+
+unilever_shop_links = ["rumah-bersih-unilever", "unilever-hair-beauty-studio", "daily-care-by-unilever", "unilever-food", "unilevermall"]
+
+
+##################################################
+# request headers setup
+##################################################
+
+software_names = [SoftwareName.CHROME.value]
+operating_systems = [OperatingSystem.WINDOWS.value, OperatingSystem.LINUX.value] 
+user_agent_rotator = UserAgent(software_names=software_names, operating_systems=operating_systems, limit=100)
+user_agent = user_agent_rotator.get_random_user_agent()
+HEADERS = {"User-Agent": f"{user_agent}"}
 
 
 ##################################################
@@ -44,16 +58,19 @@ class tr_raw_scrap_data(base):
 
 def driver_maker():
     service = Service(executable_path = "/home/airflow/browser_driver/geckodriver")
+    # service = Service(executable_path = "./pipeline/apache_airflow/unilever_scraping_pipeline/nodes/level_1/geckodriver.exe")
     options = FirefoxOptions()
-    options.binary_location = "C:/Program Files/Mozilla Firefox/firefox.exe"
+    # options.binary_location = "C:/Program Files/Mozilla Firefox/firefox.exe"
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
-    options.add_argument('--display=:99')
+    options.add_argument("--display=:99")
+    options.add_argument(f"--user-agent={user_agent}")
     driver = Firefox(service = service, options = options)
     return driver
 
 def scroll_until_next_button(driver):
+    counter = 0
     while True:
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
         time.sleep(2)
@@ -62,6 +79,9 @@ def scroll_until_next_button(driver):
         next_button = soup.find('a', {'data-testid': 'btnShopProductPageNext', 'class': 'css-buross'})
         if next_button:
             break 
+        if counter > 5:
+            break
+        counter += 1
 
 def product_validity_count(url, full_check = False):
     global HEADERS
@@ -75,6 +95,9 @@ def product_validity_count(url, full_check = False):
             driver.get(url)
             scroll_until_next_button(driver)
             soup = BeautifulSoup(driver.page_source, 'html.parser')
+    invalid_page_mark = soup.find_all('div', class_= 'css-3ytcpr-unf-emptystate e1mmy8p70')
+    if len(invalid_page_mark) > 0:
+        return 0, 0
     all_products = soup.find_all('a', class_= 'oQ94Awb6LlTiGByQZo8Lyw== IM26HEnTb-krJayD-R0OHw==')
     invalid_products = soup.find_all('div', class_ = "_4A0sz2e6IddlQgpD0HR6qw==")
     valid_count = len(all_products) - len(invalid_products)
@@ -84,7 +107,10 @@ def find_last_valid_page(base_url,  step = 10):
     page = step
     while True:
         valid, invalid = product_validity_count(f"{base_url}/page/{page}")
-        if invalid > 0:
+        if valid == 0 and invalid == 0:
+            page -= 1
+            break
+        elif invalid > 0:
             if valid > 0:
                 logger.info(f"Last valid page: {page}")
                 return page
@@ -113,7 +139,7 @@ def find_last_valid_page(base_url,  step = 10):
                 logger.info(f"Last valid page: {page}")
                 return page
             if status == 0:
-                page -= 1       
+                page -= 1     
 
 def extract_active_product_links(soup, url):
     try:
@@ -150,7 +176,7 @@ def is_page_empty(soup, product_url) -> bool:
         return False
     except Exception as e:
         logger.error(f"On is_page_empty(): {e}")
-        
+
 def scrape_product_detail(product_url):
     global HEADERS
     current_timestamp = datetime.strftime(datetime.now(), '%Y-%m-%d')
@@ -223,5 +249,6 @@ def collect_active_product_links_parallel_executor(base_url, last_valid_page, co
 
 def run_pipeline(connection_engine):
     engine = connection_engine
-    last_valid_page = find_last_valid_page("https://www.tokopedia.com/unilever/product")
-    collect_active_product_links_parallel_executor("https://www.tokopedia.com/unilever/product", last_valid_page, engine, num_processes = 5)
+    for link in unilever_shop_links:
+        last_valid_page = find_last_valid_page(f"https://www.tokopedia.com/{link}/product")
+        collect_active_product_links_parallel_executor(f"https://www.tokopedia.com/{link}/product", last_valid_page, engine, num_processes = 5)

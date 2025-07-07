@@ -15,7 +15,7 @@ for conn_id, conn_info in credentials.items():
         "login": conn_info.get("login", ""),
         "password": conn_info.get("password", ""),
         "host": conn_info.get("host", ""),
-        "port": int(conn_info.get("port", 0)),
+        "port": conn_info.get("port", ""),
         "schema": conn_info.get("schema", ""),
         "extra": conn_info.get("extra", {})
     }
