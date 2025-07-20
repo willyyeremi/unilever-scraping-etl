@@ -63,6 +63,7 @@ def scrap_tokopedia(connection_url, real_base_path):
     sys.path.append(real_base_path)
     from nodes.level_1 import scrap_tokopedia
     
+    xvfb_process = None
     try:
         xvfb_process = Popen(['Xvfb', ':99', '-screen', '0', '1920x1080x24'])
         os.environ["DISPLAY"] = ":99"
@@ -70,8 +71,9 @@ def scrap_tokopedia(connection_url, real_base_path):
         conn_engine_online_shop = create_engine(connection_url)
         scrap_tokopedia.run_pipeline(conn_engine_online_shop)
     finally:
-        xvfb_process.send_signal(signal.SIGTERM)
-        xvfb_process.wait()
+        if xvfb_process is not None:
+            xvfb_process.send_signal(signal.SIGTERM)
+            xvfb_process.wait()
 
 
 ##################################################

@@ -25,5 +25,3 @@ for conn_id, conn_info in credentials.items():
     result = subprocess.run([
         "airflow", "connections", "add", conn_id, "--conn-json", json.dumps(conn_json)
     ])
-
-
