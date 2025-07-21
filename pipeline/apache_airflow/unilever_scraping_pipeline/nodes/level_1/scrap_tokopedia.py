@@ -113,13 +113,23 @@ class tr_raw_scrap_data(base):
 # function for pipeline
 ##################################################
 
+# def driver_maker():
+#     service = Service(executable_path = "/home/airflow/browser_driver/geckodriver")
+#     options = FirefoxOptions()
+#     options.add_argument("--no-sandbox")
+#     options.add_argument("--disable-dev-shm-usage")
+#     options.add_argument("--disable-gpu")
+#     options.add_argument("--display=:99")
+#     options.set_preference("general.useragent.override", user_agent_rotator.get_random_user_agent())
+#     driver = Firefox(service = service, options = options)
+#     return driver
+
 def driver_maker():
-    service = Service(executable_path = "/home/airflow/browser_driver/geckodriver")
+    service = Service(executable_path = "./pipeline/apache_airflow/unilever_scraping_pipeline/nodes/level_1/geckodriver.exe")
     options = FirefoxOptions()
+    options.binary_location = "C:/Program Files/Mozilla Firefox/firefox.exe"
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--display=:99")
     options.set_preference("general.useragent.override", user_agent_rotator.get_random_user_agent())
     driver = Firefox(service = service, options = options)
     return driver
@@ -138,7 +148,7 @@ def scroll_until_next_button(driver):
             break
         counter += 1
 
-def product_validity_count(url, full_check = False):
+def product_validity_count(url: str, full_check: bool = False) -> tuple[int, int]:
     if full_check != True:
         res = requests.Session().get(url = url, headers = HEADERS)
         if res.status_code != 200:
@@ -157,7 +167,7 @@ def product_validity_count(url, full_check = False):
     valid_count = len(all_products) - len(invalid_products)
     return valid_count, len(invalid_products)
 
-def find_last_valid_page(base_url, step = 10):
+def find_last_valid_page(base_url, step = 10) -> int:
     page = step
     while True:
         valid, invalid = product_validity_count(f"{base_url}/page/{page}")
@@ -195,7 +205,7 @@ def find_last_valid_page(base_url, step = 10):
             if status == 0:
                 page -= 1     
 
-def extract_active_product_links(soup, url):
+def extract_active_product_links(soup, url) -> Optional[list[str]]:
     try:
         link_list = []
         link_tags = soup.find_all(name = ALL_PRODUCTS["name"], attrs = ALL_PRODUCTS["attrs"])
@@ -216,11 +226,11 @@ def collect_product_links_from_catalog_page(url):
             time.sleep(3)
             scroll_until_next_button(driver = driver)
             soup = BeautifulSoup(driver.page_source, 'html.parser')
-            return extract_active_product_links(soup, url)
+            link_list = extract_active_product_links(soup, url)
+            return link_list
     except Exception as e:
         logger.error(f"On collect_product_links_from_catalog_page(): {e}")
         logger.info(f"url: {url}")
-        return []
 
 def is_page_empty(soup, product_url) -> Optional[bool]:
     try:
@@ -312,3 +322,17 @@ def run_pipeline(connection_engine):
         last_valid_page = find_last_valid_page(f"https://www.tokopedia.com/{link}/product")
         collect_active_product_links_parallel_executor(f"https://www.tokopedia.com/{link}/product", last_valid_page, engine, num_processes = 5)
 
+if __name__ == "__main__":
+    from sqlalchemy import URL, create_engine
+    url_object = URL.create(
+        f"postgresql+psycopg2"
+        ,username = "admin"
+        ,password = "admin"
+        ,host = "localhost"
+        ,port = 5432
+        ,database = "online_shop"
+    )
+    engine = create_engine(url_object)
+    for link in UNILEVER_SHOP_LINKS:
+        last_valid_page = find_last_valid_page(f"https://www.tokopedia.com/{link}/product")
+        collect_active_product_links_parallel_executor(f"https://www.tokopedia.com/{link}/product", last_valid_page, engine, num_processes = 5)
