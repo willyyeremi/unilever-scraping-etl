@@ -6,7 +6,8 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from random_user_agent.user_agent import UserAgent
 from random_user_agent.params import SoftwareName, OperatingSystem
-import requests
+from curl_cffi import requests
+# import requests
 from selenium.webdriver import Firefox, FirefoxOptions
 from selenium.webdriver.firefox.service import Service
 from bs4 import BeautifulSoup
@@ -21,24 +22,12 @@ from sqlalchemy.orm import declarative_base, Session
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-UNILEVER_SHOP_LINKS = ["rumah-bersih-unilever", "unilever-hair-beauty-studio", "daily-care-by-unilever", "unilever-food", "unilevermall"]
-CURRENT_TIMESTAMP = datetime.strftime(datetime.now(), '%Y-%m-%d')
-
-
-##################################################
-# request headers setup
-##################################################
-
-software_names = [SoftwareName.CHROME.value]
+software_names = [SoftwareName.FIREFOX.value]
 operating_systems = [OperatingSystem.WINDOWS.value, OperatingSystem.LINUX.value] 
 user_agent_rotator = UserAgent(software_names=software_names, operating_systems=operating_systems, limit=100)
 
-# HEADERS = {
-#     "User-Agent": f"{user_agent_rotator.get_random_user_agent()}"
-# }
-HEADERS = {
-    "User-Agent": "Mozilla/5.0"
-}
+UNILEVER_SHOP_LINKS = ["rumah-bersih-unilever", "unilever-hair-beauty-studio", "daily-care-by-unilever", "unilever-food", "unilevermall"]
+CURRENT_TIMESTAMP = datetime.strftime(datetime.now(), '%Y-%m-%d')
 
 
 ##################################################
@@ -134,23 +123,35 @@ def driver_maker():
     driver = Firefox(service = service, options = options)
     return driver
 
+def requests_page_get(url: str):
+    res = requests.get(
+        url,
+        impersonate = "firefox",
+        timeout = 10
+    )
+    return res
+
 def scroll_until_next_button(driver):
+    next_button_local_var = NEXT_BUTTON
     counter = 0
     while True:
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
         time.sleep(2)
         soup = BeautifulSoup(driver.page_source, 'html.parser')
         # Cek apakah tombol next muncul di halaman
-        next_button = soup.find(name = NEXT_BUTTON["name"], attrs = NEXT_BUTTON["attrs"])
+        next_button = soup.find(name = next_button_local_var["name"], attrs = next_button_local_var["attrs"])
         if next_button:
             break 
         if counter > 5:
             break
         counter += 1
 
-def product_validity_count(url: str, full_check: bool = False) -> tuple[int, int]:
+def product_validity_count(url: str, full_check: bool = False) -> tuple[int, int, bool]:
+    invalid_page_mark_local_var = INVALID_PAGE_MARK
+    all_products_local_var = ALL_PRODUCTS
+    invalid_products_local_var = INVALID_PRODUCTS
     if full_check != True:
-        res = requests.Session().get(url = url, headers = HEADERS)
+        res = requests_page_get(url = url)
         if res.status_code != 200:
             product_validity_count(url, full_check = True)
         soup = BeautifulSoup(res.text, 'html.parser')
@@ -159,22 +160,19 @@ def product_validity_count(url: str, full_check: bool = False) -> tuple[int, int
             driver.get(url)
             scroll_until_next_button(driver)
             soup = BeautifulSoup(driver.page_source, 'html.parser')
-    invalid_page_mark = soup.find_all(name = INVALID_PAGE_MARK["name"], attrs = INVALID_PAGE_MARK["attrs"])
+    invalid_page_mark = soup.find_all(name = invalid_page_mark_local_var["name"], attrs = invalid_page_mark_local_var["attrs"])
     if len(invalid_page_mark) > 0:
-        return 0, 0
-    all_products = soup.find_all(name = ALL_PRODUCTS["name"], attrs = ALL_PRODUCTS["attrs"])
-    invalid_products = soup.find_all(name = INVALID_PRODUCTS["name"], attrs = INVALID_PRODUCTS["attrs"])
+        return 0, 0, False
+    all_products = soup.find_all(name = all_products_local_var["name"], attrs = all_products_local_var["attrs"])
+    invalid_products = soup.find_all(name = invalid_products_local_var["name"], attrs = invalid_products_local_var["attrs"])
     valid_count = len(all_products) - len(invalid_products)
-    return valid_count, len(invalid_products)
+    return valid_count, len(invalid_products), True
 
 def find_last_valid_page(base_url, step = 10) -> int:
     page = step
     while True:
-        valid, invalid = product_validity_count(f"{base_url}/page/{page}")
-        if valid == 0 and invalid == 0:
-            page -= 1
-            break
-        elif invalid > 0:
+        valid, invalid, page_validity = product_validity_count(f"{base_url}/page/{page}")
+        if invalid > 0 or page_validity == False:
             if valid > 0:
                 logger.info(f"Last valid page: {page}")
                 return page
@@ -184,13 +182,13 @@ def find_last_valid_page(base_url, step = 10) -> int:
         page += step
     status = 0
     while True:
-        valid, invalid = product_validity_count(f"{base_url}/page/{page}")
+        valid, invalid, page_validity = product_validity_count(f"{base_url}/page/{page}")
         if valid > 0:
             if invalid > 0:
                 logger.info(f"Last valid page: {page}")
                 return page
             elif invalid == 0:
-                valid, invalid = product_validity_count(f"{base_url}/page/{page}", full_check = True)
+                valid, invalid, page_validity = product_validity_count(f"{base_url}/page/{page}", full_check = True)
                 if invalid > 0:
                     logger.info(f"Last valid page: {page}")
                     return page 
@@ -205,37 +203,39 @@ def find_last_valid_page(base_url, step = 10) -> int:
             if status == 0:
                 page -= 1     
 
-def extract_active_product_links(soup, url) -> Optional[list[str]]:
-    try:
-        link_list = []
-        link_tags = soup.find_all(name = ALL_PRODUCTS["name"], attrs = ALL_PRODUCTS["attrs"])
-        # Filter to select only valid product within a catalog page by using shadow object as marker
-        for link_tag in link_tags:
-            if link_tag.find(name = INVALID_PRODUCTS["name"], attrs = INVALID_PRODUCTS["attrs"]):
-                continue 
-            link_list.append(link_tag.get("href"))
-        return link_list
-    except Exception as e:
-        logger.error(f"On extract_active_product_links(): {e}")
-        logger.info(f"url: {url}")
-
-def collect_product_links_from_catalog_page(url):
+def collect_product_links_from_catalog_page(url: str) -> Optional[list[str]]:
+    all_products_local_var = ALL_PRODUCTS
+    invalid_products_local_var = INVALID_PRODUCTS
     try:
         with driver_maker() as driver:
             driver.get(url)
             time.sleep(3)
             scroll_until_next_button(driver = driver)
             soup = BeautifulSoup(driver.page_source, 'html.parser')
-            link_list = extract_active_product_links(soup, url)
+            link_list = []
+            link_tags = soup.find_all(name = all_products_local_var["name"], attrs = all_products_local_var["attrs"])
+            # Filter to select only valid product within a catalog page by using shadow object as marker
+            for link_tag in link_tags:
+                if link_tag.find(name = invalid_products_local_var["name"], attrs = invalid_products_local_var["attrs"]):
+                    continue 
+                link_list.append(link_tag.get("href"))
             return link_list
     except Exception as e:
         logger.error(f"On collect_product_links_from_catalog_page(): {e}")
         logger.info(f"url: {url}")
 
 def is_page_empty(soup, product_url) -> Optional[bool]:
+    product_name_local_var = PRODUCT_NAME
+    product_price_local_var = PRODUCT_PRICE
     try:
-        product_name = soup.find(name = PRODUCT_NAME["name"], attrs = PRODUCT_NAME["attrs"]) if soup.find(name = PRODUCT_NAME["name"], attrs = PRODUCT_NAME["attrs"]) else None
-        product_price = soup.find(name = PRODUCT_PRICE["name"], attrs = PRODUCT_PRICE["attrs"]) if soup.find(name = PRODUCT_PRICE["name"], attrs = PRODUCT_PRICE["attrs"]) else None
+        if soup.find(name = product_name_local_var["name"], attrs = product_name_local_var["attrs"]):
+            product_name = soup.find(name = product_name_local_var["name"], attrs = product_name_local_var["attrs"])
+        else:
+            product_name = None
+        if soup.find(name = product_price_local_var["name"], attrs = product_price_local_var["attrs"]):
+            product_price = soup.find(name = product_price_local_var["name"], attrs = product_price_local_var["attrs"]) 
+        else:
+            product_price = None
         if product_name is None or product_price is None:
             logger.info(f"Page is empty | url: {product_url}")
             return True
@@ -245,9 +245,15 @@ def is_page_empty(soup, product_url) -> Optional[bool]:
         logger.error(f"On is_page_empty(): {e}")
 
 def scrape_product_detail(product_url):
+    product_name_local_var = PRODUCT_NAME
+    product_detail_local_var = PRODUCT_DETAIL
+    product_price_local_var = PRODUCT_PRICE
+    product_originalprice_local_var = PRODUCT_ORIGINALPRICE
+    product_discountpercentage_local_var = PRODUCT_DISCOUNTPERCENTAGE
+    current_timestamp_local_var = CURRENT_TIMESTAMP
     product_data = {}
     try:
-        res = requests.Session().get(url = product_url, headers = HEADERS)
+        res = requests_page_get(url = product_url)
         if res.status_code != 200:
             logger.info(f"Status code: {res.status_code} ({res.reason}) | url: {product_url}")
         soup = BeautifulSoup(res.text, 'html.parser')
@@ -258,20 +264,33 @@ def scrape_product_detail(product_url):
                 driver.get(product_url)
                 time.sleep(3)
                 soup = BeautifulSoup(driver.page_source, 'html.parser')
-        product_data['name'] = soup.find(name = PRODUCT_NAME["name"], attrs = PRODUCT_NAME["attrs"]).get_text(strip = True)
-        product_data['detail'] = soup.find(name = PRODUCT_DETAIL["name"], attrs = PRODUCT_DETAIL["attrs"]).get_text(strip = True) if soup.find(name = PRODUCT_DETAIL["name"], attrs = PRODUCT_DETAIL["attrs"]).get_text(strip = True) else None
-        product_data['price'] = int(soup.find(name = PRODUCT_PRICE["name"], attrs = PRODUCT_PRICE["attrs"]).get_text(strip = True).replace("Rp", "").replace(".", ""))
-        product_data['originalprice'] = int(soup.find(name = PRODUCT_ORIGINALPRICE["name"], attrs = PRODUCT_ORIGINALPRICE["attrs"]).get_text(strip = True).replace("Rp", "").replace(".", "")) if soup.find(name = PRODUCT_ORIGINALPRICE["name"], attrs = PRODUCT_ORIGINALPRICE["attrs"]).get_text(strip = True)else None
-        product_data['discountpercentage'] = float(soup.find(name = PRODUCT_DISCOUNTPERCENTAGE["name"], attrs = PRODUCT_DISCOUNTPERCENTAGE["attrs"]).get_text(strip = True).replace("%", "")) / 100 if soup.find(name = PRODUCT_DISCOUNTPERCENTAGE["name"], attrs = PRODUCT_DISCOUNTPERCENTAGE["attrs"]).get_text(strip = True) else None
+        product_data['name'] = soup.find(name = product_name_local_var["name"], attrs = product_name_local_var["attrs"]).get_text(strip = True)
+        if soup.find(name = product_detail_local_var["name"], attrs = product_detail_local_var["attrs"]):
+            product_data['detail'] = soup.find(name = product_detail_local_var["name"], attrs = product_detail_local_var["attrs"]).get_text(strip = True) 
+        else: 
+            product_data['detail'] = None
+        product_data['price'] = int(soup.find(name = product_price_local_var["name"], attrs = product_price_local_var["attrs"]).get_text(strip = True).replace("Rp", "").replace(".", ""))
+        if soup.find(name = product_originalprice_local_var["name"], attrs = product_originalprice_local_var["attrs"]):
+            product_data['originalprice'] = int(soup.find(name = product_originalprice_local_var["name"], attrs = product_originalprice_local_var["attrs"]).get_text(strip = True).replace("Rp", "").replace(".", ""))
+        else:
+            product_data['originalprice'] = None
+        if soup.find(name = product_discountpercentage_local_var["name"], attrs = product_discountpercentage_local_var["attrs"]): 
+            product_data['discountpercentage'] = float(soup.find(name = product_discountpercentage_local_var["name"], attrs = product_discountpercentage_local_var["attrs"]).get_text(strip = True).replace("%", "")) / 100
+        else: 
+            product_data['discountpercentage'] = None
         product_data['platform'] = 'tokopedia'
-        product_data['createdate'] = CURRENT_TIMESTAMP
+        product_data['createdate'] = current_timestamp_local_var
         return product_data
     except Exception as e:
-        logger.error(f"On scrape_product_detail(): {e}")
-        logger.info(f"url: {product_url}")
-        if product_data is not {}:
-            logger.info(f"data: {product_data}")
-        logger.info(f"Probably the url page is changed in the middle of scraping")
+        if len(product_data) != 0:
+            data_log = f"data: {product_data}"
+        else:
+            data_log = ""
+        logger.error(
+            f"""On scrape_product_detail(): {e}
+            url: {product_url}
+            {data_log}"""
+        )
 
 def data_insert(connection_engine, data):
     try:

@@ -1,7 +1,6 @@
 random_user_agent
+curl_cffi
 selenium
-webdriver-manager
 beautifulsoup4
-requests
 sqlalchemy
 psycopg2-binary
