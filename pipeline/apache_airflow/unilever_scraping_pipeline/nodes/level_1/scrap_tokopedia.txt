@@ -1,4 +1,3 @@
-random_user_agent
 curl_cffi
 selenium
 beautifulsoup4

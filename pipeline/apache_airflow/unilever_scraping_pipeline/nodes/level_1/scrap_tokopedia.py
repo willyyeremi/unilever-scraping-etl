@@ -4,10 +4,7 @@ import logging
 from typing import Optional
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
-from random_user_agent.user_agent import UserAgent
-from random_user_agent.params import SoftwareName, OperatingSystem
 from curl_cffi import requests
-# import requests
 from selenium.webdriver import Firefox, FirefoxOptions
 from selenium.webdriver.firefox.service import Service
 from bs4 import BeautifulSoup
@@ -21,10 +18,6 @@ from sqlalchemy.orm import declarative_base, Session
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-software_names = [SoftwareName.FIREFOX.value]
-operating_systems = [OperatingSystem.WINDOWS.value, OperatingSystem.LINUX.value] 
-user_agent_rotator = UserAgent(software_names=software_names, operating_systems=operating_systems, limit=100)
 
 UNILEVER_SHOP_LINKS = ["rumah-bersih-unilever", "unilever-hair-beauty-studio", "daily-care-by-unilever", "unilever-food", "unilevermall"]
 CURRENT_TIMESTAMP = datetime.strftime(datetime.now(), '%Y-%m-%d')
@@ -102,24 +95,13 @@ class tr_raw_scrap_data(base):
 # function for pipeline
 ##################################################
 
-# def driver_maker():
-#     service = Service(executable_path = "/home/airflow/browser_driver/geckodriver")
-#     options = FirefoxOptions()
-#     options.add_argument("--no-sandbox")
-#     options.add_argument("--disable-dev-shm-usage")
-#     options.add_argument("--disable-gpu")
-#     options.add_argument("--display=:99")
-#     options.set_preference("general.useragent.override", user_agent_rotator.get_random_user_agent())
-#     driver = Firefox(service = service, options = options)
-#     return driver
-
 def driver_maker():
-    service = Service(executable_path = "./pipeline/apache_airflow/unilever_scraping_pipeline/nodes/level_1/geckodriver.exe")
+    service = Service(executable_path = "/home/airflow/browser_driver/geckodriver")
     options = FirefoxOptions()
-    options.binary_location = "C:/Program Files/Mozilla Firefox/firefox.exe"
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
-    options.set_preference("general.useragent.override", user_agent_rotator.get_random_user_agent())
+    options.add_argument("--disable-gpu")
+    options.add_argument("--display=:99")
     driver = Firefox(service = service, options = options)
     return driver
 
@@ -174,7 +156,7 @@ def find_last_valid_page(base_url, step = 10) -> int:
         valid, invalid, page_validity = product_validity_count(f"{base_url}/page/{page}")
         if invalid > 0 or page_validity == False:
             if valid > 0:
-                logger.info(f"Last valid page: {page}")
+                logger.info(f"Last valid page for {base_url}: {page}")
                 return page
             else:
                 page -= (step // 2)
@@ -190,7 +172,7 @@ def find_last_valid_page(base_url, step = 10) -> int:
             elif invalid == 0:
                 valid, invalid, page_validity = product_validity_count(f"{base_url}/page/{page}", full_check = True)
                 if invalid > 0:
-                    logger.info(f"Last valid page: {page}")
+                    logger.info(f"Last valid page for {base_url}: {page}")
                     return page 
                 else:
                     page += 1
@@ -198,7 +180,7 @@ def find_last_valid_page(base_url, step = 10) -> int:
         if valid == 0:
             if status == 1:
                 page -= 1
-                logger.info(f"Last valid page: {page}")
+                logger.info(f"Last valid page for {base_url}: {page}")
                 return page
             if status == 0:
                 page -= 1     
@@ -221,8 +203,10 @@ def collect_product_links_from_catalog_page(url: str) -> Optional[list[str]]:
                 link_list.append(link_tag.get("href"))
             return link_list
     except Exception as e:
-        logger.error(f"On collect_product_links_from_catalog_page(): {e}")
-        logger.info(f"url: {url}")
+        logger.error(
+            f"""On collect_product_links_from_catalog_page(): {e}
+            url: {url}"""
+        )
 
 def is_page_empty(soup, product_url) -> Optional[bool]:
     product_name_local_var = PRODUCT_NAME
@@ -307,8 +291,10 @@ def data_insert(connection_engine, data):
             session.add(new_data)
             session.commit()
     except Exception as e:
-        logger.error(f"On data_insert(): {e}")
-        logger.info(f"data: {data}")
+        logger.error(
+            f"""On data_insert(): {e}
+            data: {data}"""
+        )
 
 def collect_active_product_links_parallel_executor(base_url, last_valid_page, connection_engine, num_processes = 5):
     try:
@@ -337,21 +323,6 @@ def collect_active_product_links_parallel_executor(base_url, last_valid_page, co
 
 def run_pipeline(connection_engine):
     engine = connection_engine
-    for link in UNILEVER_SHOP_LINKS:
-        last_valid_page = find_last_valid_page(f"https://www.tokopedia.com/{link}/product")
-        collect_active_product_links_parallel_executor(f"https://www.tokopedia.com/{link}/product", last_valid_page, engine, num_processes = 5)
-
-if __name__ == "__main__":
-    from sqlalchemy import URL, create_engine
-    url_object = URL.create(
-        f"postgresql+psycopg2"
-        ,username = "admin"
-        ,password = "admin"
-        ,host = "localhost"
-        ,port = 5432
-        ,database = "online_shop"
-    )
-    engine = create_engine(url_object)
     for link in UNILEVER_SHOP_LINKS:
         last_valid_page = find_last_valid_page(f"https://www.tokopedia.com/{link}/product")
         collect_active_product_links_parallel_executor(f"https://www.tokopedia.com/{link}/product", last_valid_page, engine, num_processes = 5)
