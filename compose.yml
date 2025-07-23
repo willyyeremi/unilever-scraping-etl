@@ -2,17 +2,14 @@ name: unilever-scraping
 
 x-airflow-common:
   &airflow-common
-  build:
-    context: .
-    dockerfile: ./dockerfile/dockerfile.airflow
-  image: unilever-scraping-airflow
+  image: apache/airflow:3.0.1
   environment:
     AIRFLOW__API_AUTH__JWT_SECRET: ${API_JWT_SECRET}
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
-    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: 'http://unilever-scraping-airflow-api-server:8080/execution/'
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: 'http://${AIRFLOW_EXECUTION_API_SERVER_HOST}:${AIRFLOW_EXECUTION_API_SERVER_PORT}/execution/'
     AIRFLOW__CORE__FERNET_KEY:  ${FERNET_KEY}
     AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
-    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_DB_USERNAME}:${AIRFLOW_ODS_PASSWORD}@${AIRFLOW_ODS_HOST}:${AIRFLOW_ODS_PORT}/${AIRFLOW_ODS_DBNAME}
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${AIRFLOW_ODS_USERNAME}:${AIRFLOW_ODS_PASSWORD}@${AIRFLOW_ODS_HOST}:${AIRFLOW_ODS_PORT}/${AIRFLOW_ODS_DBNAME}
     AIRFLOW__LOGGING__WORKER_LOG_SERVER_HOST: airflow-scheduler
     AIRFLOW__WEBSERVER__SECRET_KEY: ${SECRET_KEY}
   volumes:
@@ -27,6 +24,10 @@ x-airflow-common:
 services:
   airflow-scheduler:
     <<: *airflow-common
+    build:
+      context: .
+      dockerfile: ./dockerfile/dockerfile.airflow_scheduler
+    image: unilever-scraping-airflow-scheduler
     container_name: unilever-scraping-airflow-scheduler
     volumes:
       - ./data/apache_airflow/logs:/opt/airflow/logs
@@ -38,7 +39,7 @@ services:
       airflow version &&     
       airflow db migrate && 
       python /home/airflow/initial_setup_tools/add_connection.py &&
-      exec airflow scheduler
+      airflow scheduler
       "
   airflow-api-server:
     <<: *airflow-common
@@ -55,7 +56,6 @@ services:
     command: >
       bash -c "
       airflow version && 
-      airflow db migrate && 
       airflow api-server --port 8080
       "
   airflow-dag-processor:
@@ -66,7 +66,6 @@ services:
     command: >
       bash -c "
       airflow version && 
-      airflow db migrate && 
       airflow dag-processor
       "
   airflow-triggerer:
@@ -77,7 +76,6 @@ services:
     command: >
       bash -c "
       airflow version && 
-      airflow db migrate && 
       airflow triggerer
       "
 

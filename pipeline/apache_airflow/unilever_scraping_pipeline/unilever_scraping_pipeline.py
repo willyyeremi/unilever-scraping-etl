@@ -12,6 +12,7 @@ from sqlalchemy.engine.url  import URL
 ##################################################
 
 base_path = os.path.dirname(os.path.realpath(__file__))
+path_virtual_env_one = "/home/airflow/virtual_environment/virtual_env_one/bin/python"
 
 
 ##################################################
@@ -49,10 +50,9 @@ conn_url_online_shop = str(create_url(config = conn_config_online_shop, database
 # callable for dag
 ##################################################
 
-@task.virtualenv(
-    task_id = 'scrap_tokopedia',
-    requirements = [r.strip() for r in open(os.path.join(base_path, "nodes", "level_1", "scrap_tokopedia.txt")).readlines() if r.strip() and not r.strip().startswith("#")],
-    system_site_packages = False,
+@task.external_python(
+    task_id = "scrap_tokopedia",
+    python = path_virtual_env_one
 )
 def scrap_tokopedia(connection_url, real_base_path):
     import sys
@@ -95,6 +95,7 @@ dag = DAG(
     dag_display_name  = " Unilever Scraping Pipeline",
     tags = ["web-scraping"],
     start_date = datetime.datetime(2024, 1, 1),
+    schedule = None,
     catchup = False,
     default_args = {
         "depends_on_past": False,

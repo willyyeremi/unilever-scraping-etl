@@ -1,5 +1,0 @@
-curl_cffi
-selenium
-beautifulsoup4
-sqlalchemy
-psycopg2-binary
