@@ -1,14 +1,23 @@
-FROM apache/airflow:3.0.1
-USER root
-RUN apt-get update && \
-    apt-get install -y wget unzip firefox-esr xvfb libpq-dev postgresql-client && \
-    rm -rf /var/lib/apt/lists/*
-RUN mkdir -p /var/log/xvfb
-RUN apt-get clean
+# FROM apache/airflow:3.0.1
+FROM unilever-scraping-airflow
+# USER root
+# RUN apt-get update && \
+#     apt-get install -y wget unzip firefox-esr xvfb libpq-dev postgresql-client && \
+#     rm -rf /var/lib/apt/lists/*
+# RUN mkdir -p /var/log/xvfb
+# RUN apt-get clean
 USER airflow
-# RUN pip install "apache-airflow[auth]" virtualenv cloudpickle redis
-RUN pip install virtualenv cloudpickle redis
-RUN mkdir -p /home/airflow/browser_driver && \
-    wget -P /home/airflow https://github.com/mozilla/geckodriver/releases/download/v0.34.0/geckodriver-v0.34.0-linux64.tar.gz && \
-    tar -xzf /home/airflow/geckodriver-v0.34.0-linux64.tar.gz -C /home/airflow/browser_driver && \
-    rm /home/airflow/geckodriver-v0.34.0-linux64.tar.gz
+# RUN pip install virtualenv cloudpickle redis
+# RUN mkdir -p /home/airflow/browser_driver && \
+#     wget -P /home/airflow https://github.com/mozilla/geckodriver/releases/download/v0.34.0/geckodriver-v0.34.0-linux64.tar.gz && \
+#     tar -xzf /home/airflow/geckodriver-v0.34.0-linux64.tar.gz -C /home/airflow/browser_driver && \
+#     rm /home/airflow/geckodriver-v0.34.0-linux64.tar.gz
+COPY etc/apache_airflow/requirements_file /home/airflow/requirements_file
+RUN chown -R airflow: /home/airflow/requirements_file
+RUN mkdir -p /home/airflow/virtual_environment && \
+    for req in /home/airflow/requirements_file/*.txt; do \
+        env_name=$(basename "$req" .txt); \
+        python -m virtualenv "/home/airflow/virtual_environment/$env_name" && \
+        "/home/airflow/virtual_environment/$env_name/bin/pip" install -r "$req"; \
+    done && \
+    rm -rf /home/airflow/requirements_file

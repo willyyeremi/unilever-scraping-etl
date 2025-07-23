@@ -21,7 +21,8 @@ base_path = os.path.dirname(os.path.realpath(__file__))
 driver_dict = {
     "postgresql": "psycopg2"
 }
-def create_url(config: dict[str:str], database_product: str):
+
+def create_url(config: dict, database_product: str):
     driver = driver_dict[database_product]
     url_object = URL.create(
         f"{database_product}+{driver}"
