@@ -96,6 +96,30 @@ class tr_raw_scrap_data(base):
 ##################################################
 
 def driver_maker():
+    service = Service(executable_path = "./pipeline/apache_airflow/unilever_scraping_pipeline/nodes/level_1/geckodriver.exe")
+    options = FirefoxOptions()
+    options.binary_location = "C:/Program Files/Mozilla Firefox/firefox.exe"
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    driver = Firefox(service = service, options = options)
+    return driver
+
+if __name__ == "__main__":
+    from sqlalchemy import URL, create_engine
+    url_object = URL.create(
+        f"postgresql+psycopg2"
+        ,username = "admin"
+        ,password = "admin"
+        ,host = "localhost"
+        ,port = 5432
+        ,database = "online_shop"
+    )
+    engine = create_engine(url_object)
+    for link in UNILEVER_SHOP_LINKS:
+        last_valid_page = find_last_valid_page(f"https://www.tokopedia.com/{link}/product")
+        collect_active_product_links_parallel_executor(f"https://www.tokopedia.com/{link}/product", last_valid_page, engine, num_processes = 5)
+
+def driver_maker():
     service = Service(executable_path = "/home/airflow/browser_driver/geckodriver")
     options = FirefoxOptions()
     options.add_argument("--no-sandbox")
